@@ -19,7 +19,7 @@ import {
 } from "lucide-react-native";
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
-import { generateMnemonic, deriveAddress, derivePrivateKey } from "@/utils/crypto";
+import { generateMnemonic, deriveWallet } from "@/utils/crypto";
 import useStore from "@/store/useStore";
 
 
@@ -63,9 +63,10 @@ export default function CreateWalletScreen() {
       return;
     }
     setIsInitializing(true);
+    // Small delay so loading spinner renders before heavy crypto
+    await new Promise(resolve => setTimeout(resolve, 50));
     try {
-      const address = deriveAddress(mnemonic);
-      const privateKey = derivePrivateKey(mnemonic);
+      const { address, privateKey } = deriveWallet(mnemonic);
       await initializeWallet(mnemonic, address, privateKey);
       router.push("/onboarding/wallet-ready");
     } finally {

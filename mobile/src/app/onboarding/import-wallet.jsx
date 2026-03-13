@@ -10,7 +10,7 @@ import {
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Import, AlertCircle } from "lucide-react-native";
-import { deriveAddress, derivePrivateKey, isValidMnemonic } from "@/utils/crypto";
+import { deriveWallet, isValidMnemonic } from "@/utils/crypto";
 import useStore from "@/store/useStore";
 import KeyboardAvoidingAnimatedView from "@/components/KeyboardAvoidingAnimatedView";
 
@@ -33,8 +33,7 @@ export default function ImportWalletScreen() {
       return;
     }
 
-    const address = deriveAddress(trimmed);
-    const privateKey = derivePrivateKey(trimmed);
+    const { address, privateKey } = deriveWallet(trimmed);
     await initializeWallet(trimmed, address, privateKey);
     router.push("/onboarding/wallet-ready");
   };

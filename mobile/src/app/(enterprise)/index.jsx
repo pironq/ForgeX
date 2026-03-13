@@ -5,6 +5,7 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -15,6 +16,8 @@ import {
   TrendingUp,
   Award,
   ChevronRight,
+  Lock,
+  Shield,
 } from "lucide-react-native";
 import useStore from "@/store/useStore";
 
@@ -22,7 +25,7 @@ import useStore from "@/store/useStore";
 export default function EnterpriseDashboard() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { issuedCredentials, did, enterpriseProfile } = useStore();
+  const { issuedCredentials, did, enterpriseProfile, isEnterpriseVerified, enterpriseVerificationLoading } = useStore();
 
   const stats = {
     totalIssued: issuedCredentials.length,
@@ -37,6 +40,46 @@ export default function EnterpriseDashboard() {
         : "0.0",
     activeWorkers: new Set(issuedCredentials.map((c) => c.workerDid)).size,
   };
+
+  if (enterpriseVerificationLoading) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top, justifyContent: "center", alignItems: "center" }]}>
+        <ActivityIndicator size="large" color="#16a34a" />
+        <Text style={styles.loadingText}>Checking verification status...</Text>
+      </View>
+    );
+  }
+
+  if (!isEnterpriseVerified) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.greeting}>Enterprise Dashboard</Text>
+            <Text style={styles.companyName}>
+              {enterpriseProfile?.name || "CredChain Platform"}
+            </Text>
+          </View>
+          <View style={[styles.badge, { backgroundColor: "#fef2f2" }]}>
+            <Shield size={20} color="#ef4444" />
+          </View>
+        </View>
+        <View style={styles.lockedContainer}>
+          <View style={styles.lockedIcon}>
+            <Lock size={40} color="#ef4444" />
+          </View>
+          <Text style={styles.lockedTitle}>Verification Required</Text>
+          <Text style={styles.lockedDesc}>
+            Your enterprise account is pending verification. To issue credentials, please contact the CredChain team to get verified.
+          </Text>
+          <View style={styles.contactCard}>
+            <Text style={styles.contactLabel}>CONTACT SUPPORT</Text>
+            <Text style={styles.contactEmail}>support@credchain.app</Text>
+          </View>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -318,5 +361,59 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: "Inter_700Bold",
     color: "#d97706",
+  },
+  loadingText: {
+    marginTop: 12,
+    fontFamily: "Inter_400Regular",
+    color: "#64748b",
+  },
+  lockedContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 32,
+  },
+  lockedIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "#fef2f2",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 24,
+  },
+  lockedTitle: {
+    fontSize: 22,
+    fontFamily: "Inter_700Bold",
+    color: "#1e293b",
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  lockedDesc: {
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    color: "#64748b",
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  contactCard: {
+    backgroundColor: "#f8fafc",
+    borderRadius: 12,
+    padding: 16,
+    width: "100%",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  contactLabel: {
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+    color: "#94a3b8",
+    marginBottom: 8,
+  },
+  contactEmail: {
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    color: "#1e293b",
   },
 });

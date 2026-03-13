@@ -18,12 +18,15 @@ import {
   Eye,
   Link,
   Copy,
+  CheckCircle,
 } from "lucide-react-native";
 import useStore from "@/store/useStore";
 import { useTranslation } from "@/utils/i18n";
+import { signCredential } from "@/utils/crypto";
 
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
+import QRCode from "react-native-qrcode-svg";
 
 // Mock credentials for demo
 const MOCK_CREDENTIALS = [
@@ -119,14 +122,14 @@ export default function MyCredentialsScreen() {
     }
 
     // Create a shareable link with encoded data
-    const encodedData = Buffer.from(
+    const encodedData = btoa(
       JSON.stringify({
         did: did,
         fields: selectedData,
         timestamp: Date.now(),
         issuer: selectedCredential.issuer,
       }),
-    ).toString("base64");
+    );
     const shareableUrl = `https://credchain.app/verify/${encodedData}`;
     setGeneratedLink(shareableUrl);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -208,6 +211,12 @@ export default function MyCredentialsScreen() {
             </View>
 
             <View style={styles.credStats}>
+              {cred.onChain && (
+                <View style={styles.onChainBadge}>
+                  <CheckCircle size={12} color="#16a34a" />
+                  <Text style={styles.onChainText}>On-Chain</Text>
+                </View>
+              )}
               <View style={styles.stat}>
                 <Star size={14} color="#f59e0b" fill="#f59e0b" />
                 <Text style={styles.statText}>
@@ -261,18 +270,21 @@ export default function MyCredentialsScreen() {
                 <X size={24} color="#64748b" />
               </TouchableOpacity>
             </View>
-            <View style={styles.qrPlaceholder}>
-              <Text style={styles.qrText}>QR Code Here</Text>
-              <Text style={styles.qrSubtext}>
-                (In production, use react-native-qrcode-svg)
-              </Text>
-            </View>
-            <Text style={styles.tokenLabel}>Or share this token:</Text>
-            <View style={styles.tokenBox}>
-              <Text style={styles.tokenText} numberOfLines={3}>
-                eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9...
-              </Text>
-            </View>
+            {selectedCredential && (
+              <View style={styles.qrPlaceholder}>
+                <QRCode
+                  value={JSON.stringify({
+                    issuer: selectedCredential.issuer,
+                    subject: selectedCredential.subject || did,
+                    claims: selectedCredential.claims,
+                    iat: selectedCredential.iat,
+                  })}
+                  size={200}
+                  backgroundColor="#f8fafc"
+                />
+              </View>
+            )}
+            <Text style={styles.tokenLabel}>Scan this QR to import credential</Text>
           </View>
         </View>
       </Modal>
@@ -510,6 +522,23 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 12,
     marginBottom: 16,
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  onChainBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#dcfce7",
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    gap: 4,
+    marginRight: 8,
+  },
+  onChainText: {
+    fontSize: 11,
+    fontFamily: "Inter_600SemiBold",
+    color: "#16a34a",
   },
   stat: {
     flexDirection: "row",

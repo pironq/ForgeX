@@ -7,6 +7,8 @@ import {
   TextInput,
   Alert,
   ScrollView,
+  ActivityIndicator,
+  Linking,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CameraView, useCameraPermissions } from "expo-camera";
@@ -18,8 +20,11 @@ import {
   ShieldCheck,
   User,
   Info,
+  Link as LinkIcon,
+  Shield,
 } from "lucide-react-native";
 import { verifyCredential } from "@/utils/crypto";
+import { verifyCredentialOnChain, getAddressExplorerUrl, CONTRACT_ADDRESS } from "@/utils/blockchain";
 import * as Haptics from "expo-haptics";
 
 
@@ -29,6 +34,10 @@ export default function VerifyCredentialScreen() {
   const [scanning, setScanning] = useState(false);
   const [manualToken, setManualToken] = useState("");
   const [result, setResult] = useState(null);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [onChainResult, setOnChainResult] = useState(null);
+
+  const isContractDeployed = CONTRACT_ADDRESS !== "0x0000000000000000000000000000000000000000";
 
   if (!permission) return <View />;
 
@@ -51,9 +60,26 @@ export default function VerifyCredentialScreen() {
     processVerification(data);
   };
 
-  const processVerification = (token) => {
+  const processVerification = async (token) => {
+    setIsVerifying(true);
+    setOnChainResult(null);
+
+    // Off-chain verification (decode JWT)
     const verification = verifyCredential(token);
     setResult(verification);
+
+    // On-chain verification if contract is deployed and off-chain is valid
+    if (isContractDeployed && verification.valid) {
+      try {
+        const chainVerification = await verifyCredentialOnChain(verification.claims);
+        setOnChainResult(chainVerification);
+      } catch (error) {
+        console.error("On-chain verification failed:", error);
+      }
+    }
+
+    setIsVerifying(false);
+
     if (verification.valid) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } else {
@@ -85,6 +111,26 @@ export default function VerifyCredentialScreen() {
           >
             {result.valid ? "Verified Success" : "Invalid Credential"}
           </Text>
+
+          {/* On-chain verification badge */}
+          {result.valid && onChainResult && (
+            <View style={styles.onChainBadgeContainer}>
+              {onChainResult.valid ? (
+                <TouchableOpacity
+                  style={styles.onChainBadge}
+                  onPress={() => Linking.openURL(getAddressExplorerUrl(onChainResult.issuer))}
+                >
+                  <Shield size={16} color="#16a34a" />
+                  <Text style={styles.onChainBadgeText}>On-Chain Verified</Text>
+                  <LinkIcon size={12} color="#16a34a" />
+                </TouchableOpacity>
+              ) : (
+                <View style={styles.offChainBadge}>
+                  <Text style={styles.offChainText}>Off-chain only</Text>
+                </View>
+              )}
+            </View>
+          )}
         </View>
 
         <ScrollView style={styles.resultDetails}>
@@ -118,6 +164,29 @@ export default function VerifyCredentialScreen() {
                 </View>
               </View>
 
+              {/* On-chain details */}
+              {onChainResult?.valid && (
+                <View style={styles.detailGroup}>
+                  <Text style={styles.detailLabel}>Blockchain Details</Text>
+                  <View style={styles.onChainDetails}>
+                    <View style={styles.chainDetailRow}>
+                      <Text style={styles.chainDetailLabel}>Issued On</Text>
+                      <Text style={styles.chainDetailValue}>
+                        {onChainResult.issuedAt?.toLocaleDateString() || "N/A"}
+                      </Text>
+                    </View>
+                    <View style={styles.chainDetailRow}>
+                      <Text style={styles.chainDetailLabel}>Platform</Text>
+                      <Text style={styles.chainDetailValue}>{onChainResult.platform}</Text>
+                    </View>
+                    <View style={styles.chainDetailRow}>
+                      <Text style={styles.chainDetailLabel}>Network</Text>
+                      <Text style={styles.chainDetailValue}>Polygon Amoy</Text>
+                    </View>
+                  </View>
+                </View>
+              )}
+
               <View style={styles.claimsContainer}>
                 <Text style={styles.detailLabel}>Claims</Text>
                 {Object.entries(result.claims).map(([key, val]) => (
@@ -143,6 +212,7 @@ export default function VerifyCredentialScreen() {
           style={styles.resetButton}
           onPress={() => {
             setResult(null);
+            setOnChainResult(null);
             setManualToken("");
           }}
         >
@@ -201,13 +271,22 @@ export default function VerifyCredentialScreen() {
               <TouchableOpacity
                 style={[
                   styles.verifyButton,
-                  !manualToken && styles.verifyButtonDisabled,
+                  (!manualToken || isVerifying) && styles.verifyButtonDisabled,
                 ]}
                 onPress={() => processVerification(manualToken)}
-                disabled={!manualToken}
+                disabled={!manualToken || isVerifying}
               >
-                <ShieldCheck size={20} color="#ffffff" />
-                <Text style={styles.verifyButtonText}>Verify Token</Text>
+                {isVerifying ? (
+                  <>
+                    <ActivityIndicator size="small" color="#ffffff" />
+                    <Text style={styles.verifyButtonText}>Verifying...</Text>
+                  </>
+                ) : (
+                  <>
+                    <ShieldCheck size={20} color="#ffffff" />
+                    <Text style={styles.verifyButtonText}>Verify Token</Text>
+                  </>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -418,5 +497,55 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontSize: 16,
     fontFamily: "Inter_600SemiBold",
+  },
+  onChainBadgeContainer: {
+    marginTop: 12,
+  },
+  onChainBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#dcfce7",
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    gap: 6,
+  },
+  onChainBadgeText: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+    color: "#16a34a",
+  },
+  offChainBadge: {
+    backgroundColor: "#f1f5f9",
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+  },
+  offChainText: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    color: "#64748b",
+  },
+  onChainDetails: {
+    backgroundColor: "#f0fdf4",
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#dcfce7",
+  },
+  chainDetailRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 8,
+  },
+  chainDetailLabel: {
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    color: "#64748b",
+  },
+  chainDetailValue: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+    color: "#16a34a",
   },
 });

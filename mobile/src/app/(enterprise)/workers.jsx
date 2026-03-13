@@ -5,6 +5,7 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -13,13 +14,36 @@ import {
   Calendar,
   ChevronRight,
   Search,
+  Lock,
 } from "lucide-react-native";
 import useStore from "@/store/useStore";
 
 
 export default function MyWorkersScreen() {
   const insets = useSafeAreaInsets();
-  const { issuedCredentials } = useStore();
+  const { issuedCredentials, isEnterpriseVerified, enterpriseVerificationLoading } = useStore();
+
+  if (enterpriseVerificationLoading) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top, justifyContent: "center", alignItems: "center" }]}>
+        <ActivityIndicator size="large" color="#16a34a" />
+      </View>
+    );
+  }
+
+  if (!isEnterpriseVerified) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top, justifyContent: "center", alignItems: "center", padding: 32 }]}>
+        <Lock size={48} color="#94a3b8" />
+        <Text style={{ fontSize: 20, fontFamily: "Inter_700Bold", color: "#1e293b", marginTop: 20, marginBottom: 8 }}>
+          Workers Locked
+        </Text>
+        <Text style={{ fontSize: 14, fontFamily: "Inter_400Regular", color: "#64748b", textAlign: "center", lineHeight: 22 }}>
+          Your enterprise must be verified to view workers. Contact support@credchain.app
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>

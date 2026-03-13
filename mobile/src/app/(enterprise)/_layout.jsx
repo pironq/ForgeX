@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Tabs } from "expo-router";
 import {
   LayoutDashboard,
@@ -6,8 +7,17 @@ import {
   ShieldCheck,
   UserCircle,
 } from "lucide-react-native";
+import useStore from "@/store/useStore";
 
 export default function EnterpriseLayout() {
+  const { checkEnterpriseVerification, isEnterpriseVerified, enterpriseVerificationLoading } = useStore();
+
+  useEffect(() => {
+    checkEnterpriseVerification();
+  }, []);
+
+  const isLocked = !isEnterpriseVerified && !enterpriseVerificationLoading;
+
   return (
     <Tabs
       screenOptions={{
@@ -32,7 +42,7 @@ export default function EnterpriseLayout() {
         name="index"
         options={{
           title: "Dashboard",
-          tabBarIcon: ({ color, size }) => (
+          tabBarIcon: ({ color }) => (
             <LayoutDashboard color={color} size={22} />
           ),
         }}
@@ -41,8 +51,8 @@ export default function EnterpriseLayout() {
         name="issue"
         options={{
           title: "Issue",
-          tabBarIcon: ({ color, size }) => (
-            <PlusCircle color={color} size={22} />
+          tabBarIcon: ({ color }) => (
+            <PlusCircle color={isLocked ? "#d1d5db" : color} size={22} />
           ),
         }}
       />
@@ -50,14 +60,16 @@ export default function EnterpriseLayout() {
         name="workers"
         options={{
           title: "Workers",
-          tabBarIcon: ({ color, size }) => <Users color={color} size={22} />,
+          tabBarIcon: ({ color }) => (
+            <Users color={isLocked ? "#d1d5db" : color} size={22} />
+          ),
         }}
       />
       <Tabs.Screen
         name="verify"
         options={{
           title: "Verify",
-          tabBarIcon: ({ color, size }) => (
+          tabBarIcon: ({ color }) => (
             <ShieldCheck color={color} size={22} />
           ),
         }}
@@ -66,7 +78,7 @@ export default function EnterpriseLayout() {
         name="profile"
         options={{
           title: "Profile",
-          tabBarIcon: ({ color, size }) => (
+          tabBarIcon: ({ color }) => (
             <UserCircle color={color} size={22} />
           ),
         }}

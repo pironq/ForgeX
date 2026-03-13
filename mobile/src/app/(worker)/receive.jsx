@@ -55,7 +55,26 @@ export default function ReceiveCredentialScreen() {
 
   const processCredential = (data) => {
     try {
-      // Data might be base64 encoded JWT or raw JWT
+      // Try parsing as JSON first (from QR code scan)
+      let parsed = null;
+      try {
+        parsed = JSON.parse(data);
+      } catch {}
+
+      if (parsed && parsed.claims) {
+        // Direct JSON format from QR: { issuer, subject, claims, iat }
+        setPreview({
+          valid: true,
+          issuer: parsed.issuer || "Unknown",
+          subject: parsed.subject || "",
+          claims: parsed.claims,
+          iat: parsed.iat,
+        });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        return;
+      }
+
+      // Otherwise try JWT token format
       const result = verifyCredential(data);
       if (result.valid) {
         setPreview(result);
@@ -348,7 +367,7 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_600SemiBold",
   },
   scannerContainer: {
-    flex: 1,
+    height: 400,
     borderRadius: 24,
     overflow: "hidden",
     backgroundColor: "#000",

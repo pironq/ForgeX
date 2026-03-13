@@ -92,11 +92,67 @@ app.post('/api/profile', async (req, res) => {
   }
 });
 
+// GET /api/enterprise/verify?address=0x...
+app.get('/api/enterprise/verify', async (req, res) => {
+  const { address } = req.query;
+
+  if (!address) {
+    return res.status(400).json({ error: 'Missing address parameter' });
+  }
+
+  try {
+    const enterprise = await db.collection('verified_enterprises').findOne({
+      walletAddress: address.toLowerCase()
+    });
+
+    if (!enterprise) {
+      return res.json({ verified: false, enterpriseName: null });
+    }
+
+    res.json({
+      verified: true,
+      enterpriseName: enterprise.name || '',
+      verifiedAt: enterprise.verifiedAt,
+    });
+  } catch (error) {
+    console.error('Error checking enterprise verification:', error);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// POST /api/admin/verify-enterprise - Add a verified enterprise (admin use only)
+app.post('/api/admin/verify-enterprise', async (req, res) => {
+  const { walletAddress, name } = req.body;
+
+  if (!walletAddress) {
+    return res.status(400).json({ error: 'Missing walletAddress' });
+  }
+
+  try {
+    const result = await db.collection('verified_enterprises').findOneAndUpdate(
+      { walletAddress: walletAddress.toLowerCase() },
+      {
+        $set: {
+          walletAddress: walletAddress.toLowerCase(),
+          name: name || '',
+          verifiedAt: new Date(),
+        },
+      },
+      { upsert: true, returnDocument: 'after' }
+    );
+
+    res.json({ success: true, enterprise: result });
+  } catch (error) {
+    console.error('Error verifying enterprise:', error);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
 // Start server
 const PORT = process.env.PORT || 3000;
 
 connectDB().then(() => {
-  app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running on http://0.0.0.0:${PORT}`);
   });
 });

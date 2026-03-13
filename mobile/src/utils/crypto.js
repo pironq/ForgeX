@@ -7,6 +7,12 @@ export const generateMnemonic = () => {
   return wallet.mnemonic.phrase;
 };
 
+// Derive wallet address and private key in one call (avoids double derivation)
+export const deriveWallet = (mnemonic) => {
+  const wallet = ethers.HDNodeWallet.fromPhrase(mnemonic);
+  return { address: wallet.address, privateKey: wallet.privateKey };
+};
+
 // Derive a real Ethereum/Polygon wallet address from a mnemonic
 export const deriveAddress = (mnemonic) => {
   const wallet = ethers.HDNodeWallet.fromPhrase(mnemonic);

@@ -16,7 +16,6 @@ import {
   Key,
   LogOut,
   ChevronRight,
-  RefreshCw,
   Copy,
   Edit,
   CheckCircle,
@@ -34,7 +33,7 @@ import { useTranslation } from "@/utils/i18n";
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { did, reset, role, profile, updateProfile, language, setLanguage } =
+  const { did, reset, profile, updateProfile, language, setLanguage } =
     useStore();
   const { t } = useTranslation(language);
   const [isEditing, setIsEditing] = useState(false);
@@ -87,26 +86,6 @@ export default function ProfileScreen() {
       console.error("Document picker error:", err);
       Alert.alert("Error", "Failed to upload document");
     }
-  };
-
-  const switchRole = () => {
-    Alert.alert(
-      t("switchView"),
-      `Switch to ${role === "worker" ? t("enterprise") : t("worker")} view?`,
-      [
-        { text: t("cancel"), style: "cancel" },
-        {
-          text: t("continue"),
-          onPress: () => {
-            const newRole = role === "worker" ? "enterprise" : "worker";
-            useStore.setState({ role: newRole });
-            router.replace(
-              newRole === "worker" ? "/(worker)" : "/(enterprise)",
-            );
-          },
-        },
-      ],
-    );
   };
 
   const getVerificationColor = (status) => {
@@ -447,17 +426,6 @@ export default function ProfileScreen() {
                 {language === "en" ? "English" : "हिंदी"}
               </Text>
             </View>
-            <ChevronRight size={18} color="#cbd5e1" />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.settingItem} onPress={switchRole}>
-            <View style={[styles.settingIcon, { backgroundColor: "#eff6ff" }]}>
-              <RefreshCw size={20} color="#2563eb" />
-            </View>
-            <Text style={styles.settingText}>
-              {t("switchView")} (
-              {role === "worker" ? t("enterprise") : t("worker")})
-            </Text>
             <ChevronRight size={18} color="#cbd5e1" />
           </TouchableOpacity>
         </View>

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -6,22 +6,55 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  Alert,
+  TextInput,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   User,
   Star,
   Calendar,
-  ChevronRight,
   Search,
   Lock,
+  Trash2,
+  CheckCircle,
+  Shield,
 } from "lucide-react-native";
 import useStore from "@/store/useStore";
-
+import * as Haptics from "expo-haptics";
 
 export default function MyWorkersScreen() {
   const insets = useSafeAreaInsets();
-  const { issuedCredentials, isEnterpriseVerified, enterpriseVerificationLoading } = useStore();
+  const { issuedCredentials, isEnterpriseVerified, enterpriseVerificationLoading, removeIssuedCredential } = useStore();
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredCredentials = issuedCredentials.filter((cred) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      cred.workerDid?.toLowerCase().includes(q) ||
+      cred.claims?.platform?.toLowerCase().includes(q)
+    );
+  });
+
+  const handleRevoke = (index, cred) => {
+    const realIndex = issuedCredentials.indexOf(cred);
+    Alert.alert(
+      "Revoke Credential",
+      `Revoke ${cred.claims.platform} credential for ${cred.workerDid?.slice(0, 12)}...?\n\nThis removes it from your records.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Revoke",
+          style: "destructive",
+          onPress: () => {
+            removeIssuedCredential(realIndex);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          },
+        },
+      ],
+    );
+  };
 
   if (enterpriseVerificationLoading) {
     return (
@@ -50,32 +83,39 @@ export default function MyWorkersScreen() {
       <View style={styles.header}>
         <Text style={styles.title}>My Workers</Text>
         <Text style={styles.subtitle}>
-          Workers you have issued credentials to
+          {issuedCredentials.length} credential{issuedCredentials.length !== 1 ? "s" : ""} issued
         </Text>
       </View>
 
       <View style={styles.searchBarContainer}>
         <View style={styles.searchBar}>
           <Search size={18} color="#94a3b8" />
-          <Text style={styles.searchText}>Search workers by DID...</Text>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search by DID or platform..."
+            placeholderTextColor="#94a3b8"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
         </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {issuedCredentials.length === 0 ? (
+        {filteredCredentials.length === 0 ? (
           <View style={styles.emptyState}>
             <User size={48} color="#e2e8f0" />
-            <Text style={styles.emptyText}>No workers yet</Text>
+            <Text style={styles.emptyText}>
+              {searchQuery ? "No matches found" : "No workers yet"}
+            </Text>
             <Text style={styles.emptySubtext}>
-              Once you issue credentials, workers will appear here.
+              {searchQuery
+                ? "Try a different search term."
+                : "Once you issue credentials, workers will appear here."}
             </Text>
           </View>
         ) : (
-          issuedCredentials.map((cred, index) => (
-            <View
-              key={index}
-              style={styles.workerCard}
-            >
+          filteredCredentials.map((cred, index) => (
+            <View key={index} style={styles.workerCard}>
               <View style={styles.workerInfo}>
                 <View style={styles.workerAvatar}>
                   <User size={20} color="#16a34a" />
@@ -98,16 +138,36 @@ export default function MyWorkersScreen() {
                 </View>
               </View>
 
+              <View style={styles.badgeRow}>
+                {cred.onChain && (
+                  <View style={styles.onChainBadge}>
+                    <CheckCircle size={12} color="#16a34a" />
+                    <Text style={styles.onChainText}>On-Chain</Text>
+                  </View>
+                )}
+                {cred.txHash && (
+                  <View style={styles.txBadge}>
+                    <Shield size={12} color="#7c3aed" />
+                    <Text style={styles.txText}>
+                      {cred.txHash.slice(0, 8)}...
+                    </Text>
+                  </View>
+                )}
+              </View>
+
               <View style={styles.workerFooter}>
                 <View style={styles.dateInfo}>
                   <Calendar size={14} color="#94a3b8" />
                   <Text style={styles.dateText}>
-                    Issued: {new Date(cred.iat * 1000).toLocaleDateString()}
+                    {new Date(cred.iat * 1000).toLocaleDateString()}
                   </Text>
                 </View>
-                <TouchableOpacity style={styles.detailsButton}>
-                  <Text style={styles.detailsText}>View Details</Text>
-                  <ChevronRight size={14} color="#16a34a" />
+                <TouchableOpacity
+                  style={styles.revokeButton}
+                  onPress={() => handleRevoke(index, cred)}
+                >
+                  <Trash2 size={14} color="#ef4444" />
+                  <Text style={styles.revokeText}>Revoke</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -154,10 +214,11 @@ const styles = StyleSheet.create({
     borderColor: "#e2e8f0",
     gap: 12,
   },
-  searchText: {
+  searchInput: {
+    flex: 1,
     fontSize: 14,
     fontFamily: "Inter_400Regular",
-    color: "#94a3b8",
+    color: "#1e293b",
   },
   scrollContent: {
     paddingHorizontal: 24,
@@ -174,7 +235,7 @@ const styles = StyleSheet.create({
   workerInfo: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 16,
+    marginBottom: 12,
   },
   workerAvatar: {
     width: 40,
@@ -213,6 +274,39 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_700Bold",
     color: "#16a34a",
   },
+  badgeRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 12,
+  },
+  onChainBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#dcfce7",
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    gap: 4,
+  },
+  onChainText: {
+    fontSize: 11,
+    fontFamily: "Inter_600SemiBold",
+    color: "#16a34a",
+  },
+  txBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f5f3ff",
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    gap: 4,
+  },
+  txText: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+    color: "#7c3aed",
+  },
   workerFooter: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -231,15 +325,19 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     color: "#94a3b8",
   },
-  detailsButton: {
+  revokeButton: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
+    backgroundColor: "#fef2f2",
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
   },
-  detailsText: {
+  revokeText: {
     fontSize: 12,
     fontFamily: "Inter_600SemiBold",
-    color: "#16a34a",
+    color: "#ef4444",
   },
   emptyState: {
     alignItems: "center",

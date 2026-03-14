@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   Alert,
   Modal,
+  RefreshControl,
+  Linking,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -19,10 +21,14 @@ import {
   Link,
   Copy,
   CheckCircle,
+  Wallet,
+  ExternalLink,
+  RefreshCw,
 } from "lucide-react-native";
 import useStore from "@/store/useStore";
 import { useTranslation } from "@/utils/i18n";
 import { signCredential } from "@/utils/crypto";
+import { CHAIN_CONFIG } from "@/utils/blockchain";
 
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
@@ -67,17 +73,28 @@ const MOCK_CREDENTIALS = [
 
 export default function MyCredentialsScreen() {
   const insets = useSafeAreaInsets();
-  const { credentials, did, language, profile } = useStore();
+  const { credentials, did, language, profile, walletBalance, walletBalanceLoading, fetchBalance } = useStore();
   const { t } = useTranslation(language);
   const [selectedCredential, setSelectedCredential] = useState(null);
   const [showSelectiveShare, setShowSelectiveShare] = useState(false);
   const [selectedFields, setSelectedFields] = useState({});
   const [generatedLink, setGeneratedLink] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Use mock data if no credentials exist
-  const displayCredentials =
-    credentials.length > 0 ? credentials : MOCK_CREDENTIALS;
-  const isMockData = credentials.length === 0;
+  useEffect(() => {
+    if (did) fetchBalance();
+  }, [did]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchBalance();
+    setRefreshing(false);
+  }, []);
+
+  // Show real credentials, fall back to demo data
+  const hasRealCredentials = credentials.length > 0;
+  const displayCredentials = hasRealCredentials ? credentials : MOCK_CREDENTIALS;
+  const isMockData = !hasRealCredentials;
 
   const totalCredentials = displayCredentials.length;
   const averageRating =
@@ -162,7 +179,33 @@ export default function MyCredentialsScreen() {
           { paddingBottom: insets.bottom + 20 },
         ]}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2563eb" />
+        }
       >
+        {/* Wallet Balance Card */}
+        <View style={styles.walletCard}>
+          <View style={styles.walletRow}>
+            <View style={styles.walletLeft}>
+              <Wallet size={18} color="#7c3aed" />
+              <Text style={styles.walletLabel}>Wallet</Text>
+            </View>
+            <Text style={styles.walletBalance}>
+              {walletBalanceLoading ? "..." : `${parseFloat(walletBalance || "0").toFixed(4)} POL`}
+            </Text>
+          </View>
+          <Text style={styles.walletNetwork}>{CHAIN_CONFIG.chainName}</Text>
+          {parseFloat(walletBalance || "0") < 0.01 && (
+            <TouchableOpacity
+              style={styles.faucetButton}
+              onPress={() => Linking.openURL("https://faucet.polygon.technology/")}
+            >
+              <Text style={styles.faucetText}>Get Free Test POL</Text>
+              <ExternalLink size={12} color="#7c3aed" />
+            </TouchableOpacity>
+          )}
+        </View>
+
         <View style={styles.summaryCard}>
           <View style={styles.summaryItem}>
             <Text style={styles.summaryValue}>{averageRating}</Text>
@@ -181,6 +224,12 @@ export default function MyCredentialsScreen() {
             <Text style={styles.summaryLabel}>{t("platforms")}</Text>
           </View>
         </View>
+
+        {isMockData && (
+          <View style={styles.demoBanner}>
+            <Text style={styles.demoBannerText}>Sample credentials shown below. Receive real credentials via QR scan.</Text>
+          </View>
+        )}
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>{t("myCredentials")}</Text>
@@ -756,5 +805,71 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     color: "#94a3b8",
     textAlign: "center",
+  },
+  walletCard: {
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#ede9fe",
+  },
+  walletRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  walletLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  walletLabel: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+    color: "#64748b",
+  },
+  walletBalance: {
+    fontSize: 16,
+    fontFamily: "Inter_700Bold",
+    color: "#1e293b",
+  },
+  walletNetwork: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+    color: "#94a3b8",
+    marginBottom: 4,
+  },
+  faucetButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 4,
+    backgroundColor: "#f5f3ff",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    marginTop: 6,
+  },
+  faucetText: {
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+    color: "#7c3aed",
+  },
+  demoBanner: {
+    backgroundColor: "#fffbeb",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#fef3c7",
+  },
+  demoBannerText: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    color: "#92400e",
+    textAlign: "center",
+    lineHeight: 18,
   },
 });

@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Linking,
+  RefreshControl,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -30,11 +31,18 @@ import { CHAIN_CONFIG, getExplorerUrl } from "@/utils/blockchain";
 export default function EnterpriseDashboard() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { issuedCredentials, did, enterpriseProfile, isEnterpriseVerified, enterpriseVerificationLoading, walletBalance, walletBalanceLoading, fetchBalance } = useStore();
+  const { issuedCredentials, did, enterpriseProfile, isEnterpriseVerified, enterpriseVerificationLoading, walletBalance, walletBalanceLoading, fetchBalance, checkEnterpriseVerification } = useStore();
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     if (did && isEnterpriseVerified) fetchBalance();
   }, [did, isEnterpriseVerified]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.all([fetchBalance(), checkEnterpriseVerification()]);
+    setRefreshing(false);
+  }, []);
 
   const stats = {
     totalIssued: issuedCredentials.length,
@@ -110,6 +118,9 @@ export default function EnterpriseDashboard() {
           { paddingBottom: insets.bottom + 20 },
         ]}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#16a34a" />
+        }
       >
         <View style={styles.statsContainer}>
           <View style={styles.statCard}>

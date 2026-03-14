@@ -82,7 +82,7 @@ const useStore = create(
             set((s) => ({
               enterpriseProfile: {
                 ...s.enterpriseProfile,
-                name: s.enterpriseProfile.name || result.enterpriseName,
+                name: result.enterpriseName,
               },
             }));
           }
@@ -154,6 +154,11 @@ const useStore = create(
       addIssuedCredential: (credential) =>
         set((state) => ({
           issuedCredentials: [...state.issuedCredentials, credential],
+        })),
+
+      removeIssuedCredential: (index) =>
+        set((state) => ({
+          issuedCredentials: state.issuedCredentials.filter((_, i) => i !== index),
         })),
 
       reset: () =>

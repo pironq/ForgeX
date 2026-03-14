@@ -64,8 +64,27 @@ export default function VerifyCredentialScreen() {
     setIsVerifying(true);
     setOnChainResult(null);
 
-    // Off-chain verification (decode JWT)
-    const verification = verifyCredential(token);
+    // Try parsing as JSON first (from worker share QR)
+    let verification = null;
+    try {
+      const parsed = JSON.parse(token);
+      if (parsed && parsed.claims) {
+        verification = {
+          valid: true,
+          issuer: parsed.issuer || "Unknown",
+          subject: parsed.subject || "",
+          claims: parsed.claims,
+        };
+      }
+    } catch {
+      // Not JSON — try as JWT
+    }
+
+    // Fall back to JWT verification
+    if (!verification) {
+      verification = verifyCredential(token);
+    }
+
     setResult(verification);
 
     // On-chain verification if contract is deployed and off-chain is valid

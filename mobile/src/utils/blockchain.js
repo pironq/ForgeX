@@ -6,7 +6,7 @@ import * as SecureStore from "expo-secure-store";
 export const CHAIN_CONFIG = {
   chainId: 80002,
   chainName: "Polygon Amoy Testnet",
-  rpcUrl: "https://rpc-amoy.polygon.technology/",
+  rpcUrl: "https://polygon-amoy-bor-rpc.publicnode.com",
   blockExplorer: "https://amoy.polygonscan.com",
   currency: { name: "POL", symbol: "POL", decimals: 18 },
 };
@@ -22,6 +22,7 @@ export const CONTRACT_ABI = [
   "function getWorkerCredentials(address worker) external view returns (bytes32[] memory)",
   "function getWorkerCredentialCount(address worker) external view returns (uint256)",
   "function isVerifiedIssuer(address issuer) external view returns (bool)",
+  "function addVerifiedIssuer(address issuer) external",
   "event CredentialIssued(bytes32 indexed hash, address indexed issuer, address indexed worker, string platform, uint256 timestamp)",
 ];
 
@@ -78,6 +79,34 @@ export async function issueCredentialOnChain(credentialData, workerAddress, plat
     return {
       success: false,
       error: error.message,
+    };
+  }
+}
+
+// Estimate gas for issuing credential on-chain
+export async function estimateIssueGas(credentialData, workerAddress, platform) {
+  try {
+    const contract = await getContractWithSigner();
+    const hash = hashCredential(credentialData);
+    const provider = getProvider();
+
+    const gasEstimate = await contract.issueCredential.estimateGas(hash, workerAddress, platform);
+    const feeData = await provider.getFeeData();
+    const gasPrice = feeData.gasPrice || 0n;
+    const totalCost = gasEstimate * gasPrice;
+
+    return {
+      gasLimit: gasEstimate.toString(),
+      gasPrice: ethers.formatUnits(gasPrice, "gwei"),
+      totalCostWei: totalCost.toString(),
+      totalCostPOL: ethers.formatEther(totalCost),
+    };
+  } catch (error) {
+    return {
+      error: error.message,
+      gasLimit: "~100,000",
+      gasPrice: "~30",
+      totalCostPOL: "~0.003",
     };
   }
 }

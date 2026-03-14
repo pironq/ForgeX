@@ -9,6 +9,7 @@ import {
   Alert,
   ActivityIndicator,
   Linking,
+  Modal,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -22,9 +23,11 @@ import {
   Link as LinkIcon,
   Shield,
   Lock,
+  Fuel,
+  X,
 } from "lucide-react-native";
 import { signCredential } from "@/utils/crypto";
-import { issueCredentialOnChain, getExplorerUrl, CONTRACT_ADDRESS } from "@/utils/blockchain";
+import { issueCredentialOnChain, estimateIssueGas, getExplorerUrl, CONTRACT_ADDRESS, CHAIN_CONFIG } from "@/utils/blockchain";
 import useStore from "@/store/useStore";
 import * as Haptics from "expo-haptics";
 import QRCode from "react-native-qrcode-svg";
@@ -38,7 +41,7 @@ const CredentialQR = ({ value }) => (
 
 export default function IssueCredentialScreen() {
   const insets = useSafeAreaInsets();
-  const { did, addIssuedCredential, isEnterpriseVerified, enterpriseVerificationLoading } = useStore();
+  const { did, addIssuedCredential, isEnterpriseVerified, enterpriseVerificationLoading, fetchBalance } = useStore();
   const [formData, setFormData] = useState({
     workerDid: "",
     platform: "",
@@ -49,59 +52,87 @@ export default function IssueCredentialScreen() {
   const [issuedToken, setIssuedToken] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [onChainResult, setOnChainResult] = useState(null);
+  const [gasModal, setGasModal] = useState({ visible: false, estimates: null, loading: false });
 
   const isContractDeployed = CONTRACT_ADDRESS !== "0x0000000000000000000000000000000000000000";
+
+  const buildClaims = () => ({
+    platform: formData.platform,
+    rating: parseFloat(formData.rating),
+    deliveries: parseInt(formData.deliveries) || 0,
+    years: parseFloat(formData.years) || 0,
+    type: "WorkRating",
+  });
 
   const handleIssue = async () => {
     if (!formData.workerDid || !formData.platform || !formData.rating) {
       Alert.alert("Missing Info", "Please fill in the required fields.");
       return;
     }
-
     if (!did) {
-      Alert.alert(
-        "Error",
-        "Your wallet is not initialized. Please restart the app.",
-      );
+      Alert.alert("Error", "Your wallet is not initialized. Please restart the app.");
       return;
     }
 
+    if (isContractDeployed) {
+      // Show gas approval modal first
+      setGasModal({ visible: true, estimates: null, loading: true });
+      const estimates = await estimateIssueGas(buildClaims(), formData.workerDid, formData.platform);
+      setGasModal({ visible: true, estimates, loading: false });
+    } else {
+      // No contract — issue off-chain directly
+      await executeIssue(false);
+    }
+  };
+
+  const executeIssue = async (onChain) => {
+    setGasModal({ visible: false, estimates: null, loading: false });
     setIsLoading(true);
 
     try {
-      const claims = {
-        platform: formData.platform,
-        rating: parseFloat(formData.rating),
-        deliveries: parseInt(formData.deliveries) || 0,
-        years: parseFloat(formData.years) || 0,
-        type: "WorkRating",
-      };
-
-      // Sign credential off-chain (for QR sharing)
+      const claims = buildClaims();
       const token = await signCredential(did, formData.workerDid, claims);
 
-      // Try to issue on-chain if contract is deployed
-      let chainResult = null;
-      if (isContractDeployed) {
-        chainResult = await issueCredentialOnChain(claims, formData.workerDid, formData.platform);
-        setOnChainResult(chainResult);
-      }
-
+      // Show QR immediately with off-chain token
       setIssuedToken(token);
-      addIssuedCredential({
+      setIsLoading(false);
+
+      const credentialEntry = {
         token,
         claims,
         workerDid: formData.workerDid,
         iat: Math.floor(Date.now() / 1000),
-        onChain: chainResult?.success || false,
-        txHash: chainResult?.txHash || null,
-        credentialHash: chainResult?.hash || null,
-      });
+        onChain: false,
+        txHash: null,
+        credentialHash: null,
+      };
+
+      // Try on-chain in background — don't block the QR
+      if (onChain && isContractDeployed) {
+        setOnChainResult({ pending: true });
+        issueCredentialOnChain(claims, formData.workerDid, formData.platform)
+          .then((chainResult) => {
+            setOnChainResult(chainResult);
+            if (chainResult.success) {
+              credentialEntry.onChain = true;
+              credentialEntry.txHash = chainResult.txHash;
+              credentialEntry.credentialHash = chainResult.hash;
+              fetchBalance();
+            }
+            addIssuedCredential(credentialEntry);
+          })
+          .catch(() => {
+            setOnChainResult({ success: false, error: "Network error" });
+            addIssuedCredential(credentialEntry);
+          });
+      } else {
+        addIssuedCredential(credentialEntry);
+      }
+
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
       console.error("Error issuing credential:", error);
       Alert.alert("Error", "Failed to issue credential. Please try again.");
-    } finally {
       setIsLoading(false);
     }
   };
@@ -149,7 +180,12 @@ export default function IssueCredentialScreen() {
           {/* On-chain status */}
           {onChainResult && (
             <View style={styles.onChainStatus}>
-              {onChainResult.success ? (
+              {onChainResult.pending ? (
+                <View style={styles.onChainBadge}>
+                  <ActivityIndicator size="small" color="#f59e0b" />
+                  <Text style={[styles.onChainBadgeText, { color: "#f59e0b" }]}>Recording on-chain...</Text>
+                </View>
+              ) : onChainResult.success ? (
                 <>
                   <View style={styles.onChainBadge}>
                     <Shield size={16} color="#16a34a" />
@@ -314,6 +350,76 @@ export default function IssueCredentialScreen() {
           )}
         </View>
       </ScrollView>
+
+      {/* Gas Approval Modal */}
+      <Modal
+        visible={gasModal.visible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setGasModal({ visible: false, estimates: null, loading: false })}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderLeft}>
+                <Fuel size={20} color="#f59e0b" />
+                <Text style={styles.modalTitle}>Confirm Transaction</Text>
+              </View>
+              <TouchableOpacity onPress={() => setGasModal({ visible: false, estimates: null, loading: false })}>
+                <X size={20} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            {gasModal.loading ? (
+              <View style={styles.modalLoading}>
+                <ActivityIndicator size="large" color="#16a34a" />
+                <Text style={styles.modalLoadingText}>Estimating gas fees...</Text>
+              </View>
+            ) : gasModal.estimates ? (
+              <>
+                <View style={styles.gasDetails}>
+                  <View style={styles.gasRow}>
+                    <Text style={styles.gasLabel}>Network</Text>
+                    <Text style={styles.gasValue}>{CHAIN_CONFIG.chainName}</Text>
+                  </View>
+                  <View style={styles.gasRow}>
+                    <Text style={styles.gasLabel}>Gas Limit</Text>
+                    <Text style={styles.gasValue}>{gasModal.estimates.gasLimit}</Text>
+                  </View>
+                  <View style={styles.gasRow}>
+                    <Text style={styles.gasLabel}>Gas Price</Text>
+                    <Text style={styles.gasValue}>{gasModal.estimates.gasPrice} Gwei</Text>
+                  </View>
+                  <View style={styles.gasDivider} />
+                  <View style={styles.gasRow}>
+                    <Text style={styles.gasTotalLabel}>Estimated Fee</Text>
+                    <Text style={styles.gasTotalValue}>{parseFloat(gasModal.estimates.totalCostPOL).toFixed(6)} POL</Text>
+                  </View>
+                </View>
+
+                <View style={styles.modalActions}>
+                  <TouchableOpacity
+                    style={styles.rejectButton}
+                    onPress={() => {
+                      setGasModal({ visible: false, estimates: null, loading: false });
+                      // Issue off-chain only
+                      executeIssue(false);
+                    }}
+                  >
+                    <Text style={styles.rejectButtonText}>Off-Chain Only</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.approveButton}
+                    onPress={() => executeIssue(true)}
+                  >
+                    <Text style={styles.approveButtonText}>Approve & Sign</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : null}
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingAnimatedView>
   );
 }
@@ -478,5 +584,109 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: "Inter_400Regular",
     color: "#16a34a",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: "#ffffff",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: 40,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 24,
+  },
+  modalHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontFamily: "Inter_700Bold",
+    color: "#1e293b",
+  },
+  modalLoading: {
+    alignItems: "center",
+    paddingVertical: 32,
+  },
+  modalLoadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    color: "#64748b",
+  },
+  gasDetails: {
+    backgroundColor: "#f8fafc",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 24,
+  },
+  gasRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 10,
+  },
+  gasLabel: {
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    color: "#64748b",
+  },
+  gasValue: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+    color: "#1e293b",
+  },
+  gasDivider: {
+    height: 1,
+    backgroundColor: "#e2e8f0",
+    marginVertical: 4,
+  },
+  gasTotalLabel: {
+    fontSize: 15,
+    fontFamily: "Inter_700Bold",
+    color: "#1e293b",
+  },
+  gasTotalValue: {
+    fontSize: 15,
+    fontFamily: "Inter_700Bold",
+    color: "#16a34a",
+  },
+  modalActions: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  rejectButton: {
+    flex: 1,
+    paddingVertical: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    alignItems: "center",
+  },
+  rejectButtonText: {
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+    color: "#64748b",
+  },
+  approveButton: {
+    flex: 1,
+    paddingVertical: 16,
+    borderRadius: 16,
+    backgroundColor: "#16a34a",
+    alignItems: "center",
+  },
+  approveButtonText: {
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+    color: "#ffffff",
   },
 });

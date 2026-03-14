@@ -18,6 +18,10 @@ async function connectDB() {
     await client.connect();
     db = client.db('credchain');
     console.log('Connected to MongoDB');
+
+    // Create indexes for fast lookups
+    await db.collection('profiles').createIndex({ walletAddress: 1 }, { unique: true });
+    await db.collection('verified_enterprises').createIndex({ walletAddress: 1 }, { unique: true });
   } catch (error) {
     console.error('MongoDB connection error:', error);
     process.exit(1);

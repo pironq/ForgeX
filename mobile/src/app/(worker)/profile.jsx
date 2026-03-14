@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   Alert,
   TextInput,
   Platform,
+  Linking,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -22,6 +23,8 @@ import {
   Upload,
   Globe,
   ChevronLeft,
+  Wallet,
+  ExternalLink,
 } from "lucide-react-native";
 import useStore from "@/store/useStore";
 import { useRouter } from "expo-router";
@@ -33,9 +36,13 @@ import { useTranslation } from "@/utils/i18n";
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { did, reset, profile, updateProfile, language, setLanguage } =
+  const { did, reset, profile, updateProfile, language, setLanguage, walletBalance, walletBalanceLoading, fetchBalance } =
     useStore();
   const { t } = useTranslation(language);
+
+  useEffect(() => {
+    if (did) fetchBalance();
+  }, [did]);
   const [isEditing, setIsEditing] = useState(false);
   const [editedProfile, setEditedProfile] = useState(profile);
   const [showLanguagePicker, setShowLanguagePicker] = useState(false);
@@ -214,6 +221,32 @@ export default function ProfileScreen() {
               </Text>
               <Copy size={12} color="#64748b" />
             </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Wallet Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>WALLET</Text>
+          <View style={styles.walletCard}>
+            <View style={styles.walletRow}>
+              <View style={styles.walletLeft}>
+                <Wallet size={18} color="#7c3aed" />
+                <Text style={styles.walletLabel}>Balance</Text>
+              </View>
+              <Text style={styles.walletBalanceText}>
+                {walletBalanceLoading ? "..." : `${parseFloat(walletBalance || "0").toFixed(4)} POL`}
+              </Text>
+            </View>
+            <View style={styles.walletRow}>
+              <Text style={styles.walletNetworkText}>Polygon Amoy Testnet</Text>
+              <TouchableOpacity
+                style={styles.faucetLink}
+                onPress={() => Linking.openURL("https://faucet.polygon.technology/")}
+              >
+                <Text style={styles.faucetLinkText}>Get Test POL</Text>
+                <ExternalLink size={12} color="#7c3aed" />
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
 
@@ -668,6 +701,47 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: "Inter_400Regular",
     color: "#94a3b8",
+  },
+  walletCard: {
+    backgroundColor: "#f8fafc",
+    borderRadius: 12,
+    padding: 14,
+    gap: 10,
+  },
+  walletRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  walletLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  walletLabel: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+    color: "#64748b",
+  },
+  walletBalanceText: {
+    fontSize: 16,
+    fontFamily: "Inter_700Bold",
+    color: "#1e293b",
+  },
+  walletNetworkText: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+    color: "#94a3b8",
+  },
+  faucetLink: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  faucetLinkText: {
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+    color: "#7c3aed",
   },
   languageContainer: {
     padding: 24,

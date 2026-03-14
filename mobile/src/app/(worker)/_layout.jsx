@@ -1,5 +1,5 @@
 import { Tabs } from "expo-router";
-import { Briefcase, Download, UserCircle } from "lucide-react-native";
+import { Briefcase, Download, Send, UserCircle } from "lucide-react-native";
 
 export default function WorkerLayout() {
   return (
@@ -36,6 +36,15 @@ export default function WorkerLayout() {
           title: "Receive",
           tabBarIcon: ({ color, size }) => (
             <Download color={color} size={size} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="request"
+        options={{
+          title: "Request",
+          tabBarIcon: ({ color, size }) => (
+            <Send color={color} size={size} />
           ),
         }}
       />

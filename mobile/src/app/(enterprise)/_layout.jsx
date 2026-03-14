@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   PlusCircle,
   Users,
+  Search,
   ShieldCheck,
   UserCircle,
 } from "lucide-react-native";
@@ -32,7 +33,7 @@ export default function EnterpriseLayout() {
         tabBarActiveTintColor: "#16a34a",
         tabBarInactiveTintColor: "#94a3b8",
         tabBarLabelStyle: {
-          fontSize: 11,
+          fontSize: 10,
           fontFamily: "Inter_600SemiBold",
           marginTop: 4,
         },
@@ -62,6 +63,15 @@ export default function EnterpriseLayout() {
           title: "Workers",
           tabBarIcon: ({ color }) => (
             <Users color={isLocked ? "#d1d5db" : color} size={22} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="discover"
+        options={{
+          title: "Discover",
+          tabBarIcon: ({ color }) => (
+            <Search color={isLocked ? "#d1d5db" : color} size={22} />
           ),
         }}
       />

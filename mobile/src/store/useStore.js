@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
-import { fetchProfile, saveProfile, fetchEnterpriseStatus } from "@/utils/api";
+import { fetchProfile, saveProfile, fetchEnterpriseStatus, createCredentialRequest as apiCreateRequest, fetchCredentialRequests as apiFetchRequests, updateCredentialRequest as apiUpdateRequest, saveCredentialToServer } from "@/utils/api";
 import { getWalletBalance } from "@/utils/blockchain";
 
 const useStore = create(
@@ -44,6 +44,10 @@ const useStore = create(
       walletBalance: null,
       walletBalanceLoading: false,
 
+      // Credential requests
+      credentialRequests: [],
+      credentialRequestsLoading: false,
+
       setRole: (role) => set({ role }),
 
       setLanguage: (language) => set({ language }),
@@ -57,6 +61,7 @@ const useStore = create(
         if (state.did) {
           saveProfile({
             walletAddress: state.did,
+            role: state.role || '',
             ...newProfile,
           }).catch((err) => console.warn("Failed to sync profile:", err));
         }
@@ -102,6 +107,38 @@ const useStore = create(
         } catch {
           set({ walletBalance: "0", walletBalanceLoading: false });
         }
+      },
+
+      // Credential request actions
+      fetchCredentialRequests: async (params) => {
+        set({ credentialRequestsLoading: true });
+        try {
+          const requests = await apiFetchRequests(params);
+          set({ credentialRequests: requests, credentialRequestsLoading: false });
+        } catch {
+          set({ credentialRequestsLoading: false });
+        }
+      },
+
+      createCredentialRequest: async (enterpriseAddress, message) => {
+        const state = get();
+        const result = await apiCreateRequest({
+          workerAddress: state.did,
+          enterpriseAddress,
+          message,
+        });
+        // Re-fetch requests
+        const requests = await apiFetchRequests({ worker: state.did });
+        set({ credentialRequests: requests });
+        return result;
+      },
+
+      updateCredentialRequestStatus: async (requestId, status) => {
+        const result = await apiUpdateRequest(requestId, status);
+        const state = get();
+        const requests = await apiFetchRequests({ enterprise: state.did });
+        set({ credentialRequests: requests });
+        return result;
       },
 
       initializeWallet: async (phrase, address, privateKey) => {
@@ -151,10 +188,27 @@ const useStore = create(
           ],
         })),
 
-      addIssuedCredential: (credential) =>
+      addIssuedCredential: (credential) => {
         set((state) => ({
           issuedCredentials: [...state.issuedCredentials, credential],
-        })),
+        }));
+
+        // Also save to server for discover feature
+        const did = get().did;
+        if (did) {
+          saveCredentialToServer({
+            workerAddress: credential.workerDid,
+            enterpriseAddress: did,
+            platform: credential.claims?.platform || '',
+            rating: credential.claims?.rating || 0,
+            deliveries: credential.claims?.deliveries || 0,
+            years: credential.claims?.years || 0,
+            type: credential.claims?.type || 'WorkRating',
+            txHash: credential.txHash || null,
+            onChain: credential.onChain || false,
+          }).catch((err) => console.warn('Failed to save credential to server:', err));
+        }
+      },
 
       removeIssuedCredential: (index) =>
         set((state) => ({
@@ -188,6 +242,8 @@ const useStore = create(
           enterpriseVerificationLoading: true,
           walletBalance: null,
           walletBalanceLoading: false,
+          credentialRequests: [],
+          credentialRequestsLoading: false,
         }),
     }),
     {

@@ -23,6 +23,11 @@ import {
   Wallet,
   ExternalLink,
   RefreshCw,
+  Inbox,
+  Search,
+  CheckCircle2,
+  XCircle,
+  MessageSquare,
 } from "lucide-react-native";
 import useStore from "@/store/useStore";
 import { CHAIN_CONFIG, getExplorerUrl } from "@/utils/blockchain";
@@ -31,18 +36,25 @@ import { CHAIN_CONFIG, getExplorerUrl } from "@/utils/blockchain";
 export default function EnterpriseDashboard() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { issuedCredentials, did, enterpriseProfile, isEnterpriseVerified, enterpriseVerificationLoading, walletBalance, walletBalanceLoading, fetchBalance, checkEnterpriseVerification } = useStore();
+  const { issuedCredentials, did, enterpriseProfile, isEnterpriseVerified, enterpriseVerificationLoading, walletBalance, walletBalanceLoading, fetchBalance, checkEnterpriseVerification, credentialRequests, fetchCredentialRequests, updateCredentialRequestStatus } = useStore();
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
-    if (did && isEnterpriseVerified) fetchBalance();
+    if (did && isEnterpriseVerified) {
+      fetchBalance();
+      fetchCredentialRequests({ enterprise: did });
+    }
   }, [did, isEnterpriseVerified]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([fetchBalance(), checkEnterpriseVerification()]);
+    await Promise.all([
+      fetchBalance(),
+      checkEnterpriseVerification(),
+      fetchCredentialRequests({ enterprise: did }),
+    ]);
     setRefreshing(false);
-  }, []);
+  }, [did]);
 
   const stats = {
     totalIssued: issuedCredentials.length,
@@ -174,6 +186,60 @@ export default function EnterpriseDashboard() {
           )}
         </View>
 
+        {/* Pending Credential Requests */}
+        {credentialRequests.filter((r) => r.status === "pending").length > 0 && (
+          <View style={styles.section}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 16 }}>
+              <Inbox size={20} color="#d97706" />
+              <Text style={styles.sectionTitle}>
+                Pending Requests ({credentialRequests.filter((r) => r.status === "pending").length})
+              </Text>
+            </View>
+            {credentialRequests
+              .filter((r) => r.status === "pending")
+              .map((req) => (
+                <View key={req._id} style={styles.requestCard}>
+                  <View style={styles.requestInfo}>
+                    <Text style={styles.requestWorker} numberOfLines={1} ellipsizeMode="middle">
+                      {req.workerAddress}
+                    </Text>
+                    {req.message ? (
+                      <Text style={styles.requestMessage} numberOfLines={2}>
+                        {req.message}
+                      </Text>
+                    ) : null}
+                    <Text style={styles.requestDate}>
+                      {new Date(req.createdAt).toLocaleDateString("en-IN", {
+                        day: "numeric",
+                        month: "short",
+                      })}
+                    </Text>
+                  </View>
+                  <View style={styles.requestActions}>
+                    <TouchableOpacity
+                      style={styles.approveBtn}
+                      onPress={async () => {
+                        await updateCredentialRequestStatus(req._id, "approved");
+                        router.push({
+                          pathname: "/(enterprise)/issue",
+                          params: { workerDid: req.workerAddress },
+                        });
+                      }}
+                    >
+                      <CheckCircle2 size={16} color="#ffffff" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.rejectBtn}
+                      onPress={() => updateCredentialRequestStatus(req._id, "rejected")}
+                    >
+                      <XCircle size={16} color="#ef4444" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+          </View>
+        )}
+
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Quick Actions</Text>
 
@@ -220,6 +286,22 @@ export default function EnterpriseDashboard() {
               <Text style={styles.actionTitle}>View All Workers</Text>
               <Text style={styles.actionDesc}>
                 See workers you've issued credentials to
+              </Text>
+            </View>
+            <ChevronRight size={20} color="#cbd5e1" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionCard}
+            onPress={() => router.push("/(enterprise)/discover")}
+          >
+            <View style={[styles.actionIcon, { backgroundColor: "#ede9fe" }]}>
+              <Search size={28} color="#7c3aed" />
+            </View>
+            <View style={styles.actionText}>
+              <Text style={styles.actionTitle}>Discover Workers</Text>
+              <Text style={styles.actionDesc}>
+                Find gig workers by city, state, and ratings
               </Text>
             </View>
             <ChevronRight size={20} color="#cbd5e1" />
@@ -576,5 +658,59 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: "Inter_400Regular",
     color: "#94a3b8",
+  },
+  requestCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#ffffff",
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "#fef3c7",
+  },
+  requestInfo: {
+    flex: 1,
+  },
+  requestWorker: {
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+    color: "#1e293b",
+    marginBottom: 2,
+  },
+  requestMessage: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    color: "#64748b",
+    marginTop: 2,
+  },
+  requestDate: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+    color: "#94a3b8",
+    marginTop: 4,
+  },
+  requestActions: {
+    flexDirection: "row",
+    gap: 8,
+    marginLeft: 12,
+  },
+  approveBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: "#16a34a",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  rejectBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: "#fef2f2",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#fecaca",
   },
 });

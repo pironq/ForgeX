@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -29,6 +29,7 @@ import {
 import { signCredential } from "@/utils/crypto";
 import { issueCredentialOnChain, estimateIssueGas, getExplorerUrl, CONTRACT_ADDRESS, CHAIN_CONFIG } from "@/utils/blockchain";
 import useStore from "@/store/useStore";
+import { useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import QRCode from "react-native-qrcode-svg";
 import KeyboardAvoidingAnimatedView from "@/components/KeyboardAvoidingAnimatedView";
@@ -42,6 +43,7 @@ const CredentialQR = ({ value }) => (
 export default function IssueCredentialScreen() {
   const insets = useSafeAreaInsets();
   const { did, addIssuedCredential, isEnterpriseVerified, enterpriseVerificationLoading, fetchBalance } = useStore();
+  const { workerDid: prefillWorkerDid } = useLocalSearchParams();
   const [formData, setFormData] = useState({
     workerDid: "",
     platform: "",
@@ -53,6 +55,13 @@ export default function IssueCredentialScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [onChainResult, setOnChainResult] = useState(null);
   const [gasModal, setGasModal] = useState({ visible: false, estimates: null, loading: false });
+
+  // Pre-fill worker address from navigation params (approve request or discover flow)
+  useEffect(() => {
+    if (prefillWorkerDid && !formData.workerDid) {
+      setFormData((prev) => ({ ...prev, workerDid: prefillWorkerDid }));
+    }
+  }, [prefillWorkerDid]);
 
   const isContractDeployed = CONTRACT_ADDRESS !== "0x0000000000000000000000000000000000000000";
 

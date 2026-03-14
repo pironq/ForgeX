@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 import { fetchProfile, saveProfile, fetchEnterpriseStatus } from "@/utils/api";
+import { getWalletBalance } from "@/utils/blockchain";
 
 const useStore = create(
   persist(
@@ -38,6 +39,10 @@ const useStore = create(
       // Enterprise verification (admin-controlled)
       isEnterpriseVerified: false,
       enterpriseVerificationLoading: true,
+
+      // Wallet balance
+      walletBalance: null,
+      walletBalanceLoading: false,
 
       setRole: (role) => set({ role }),
 
@@ -84,6 +89,18 @@ const useStore = create(
         } catch (error) {
           console.error("Enterprise verification check failed:", error);
           set({ isEnterpriseVerified: false, enterpriseVerificationLoading: false });
+        }
+      },
+
+      fetchBalance: async () => {
+        const state = get();
+        if (!state.did) return;
+        set({ walletBalanceLoading: true });
+        try {
+          const balance = await getWalletBalance(state.did);
+          set({ walletBalance: balance, walletBalanceLoading: false });
+        } catch {
+          set({ walletBalance: "0", walletBalanceLoading: false });
         }
       },
 
@@ -164,6 +181,8 @@ const useStore = create(
           language: "en",
           isEnterpriseVerified: false,
           enterpriseVerificationLoading: true,
+          walletBalance: null,
+          walletBalanceLoading: false,
         }),
     }),
     {

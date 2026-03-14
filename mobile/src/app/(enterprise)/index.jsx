@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  Linking,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -18,14 +19,22 @@ import {
   ChevronRight,
   Lock,
   Shield,
+  Wallet,
+  ExternalLink,
+  RefreshCw,
 } from "lucide-react-native";
 import useStore from "@/store/useStore";
+import { CHAIN_CONFIG, getExplorerUrl } from "@/utils/blockchain";
 
 
 export default function EnterpriseDashboard() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { issuedCredentials, did, enterpriseProfile, isEnterpriseVerified, enterpriseVerificationLoading } = useStore();
+  const { issuedCredentials, did, enterpriseProfile, isEnterpriseVerified, enterpriseVerificationLoading, walletBalance, walletBalanceLoading, fetchBalance } = useStore();
+
+  useEffect(() => {
+    if (did && isEnterpriseVerified) fetchBalance();
+  }, [did, isEnterpriseVerified]);
 
   const stats = {
     totalIssued: issuedCredentials.length,
@@ -128,6 +137,32 @@ export default function EnterpriseDashboard() {
           </View>
         </View>
 
+        {/* Wallet Balance Card */}
+        <View style={styles.walletCard}>
+          <View style={styles.walletHeader}>
+            <View style={styles.walletLeft}>
+              <Wallet size={20} color="#7c3aed" />
+              <Text style={styles.walletTitle}>Wallet Balance</Text>
+            </View>
+            <TouchableOpacity onPress={fetchBalance} disabled={walletBalanceLoading}>
+              <RefreshCw size={16} color={walletBalanceLoading ? "#cbd5e1" : "#64748b"} />
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.walletBalance}>
+            {walletBalanceLoading ? "..." : `${parseFloat(walletBalance || "0").toFixed(4)} POL`}
+          </Text>
+          <Text style={styles.walletNetwork}>{CHAIN_CONFIG.chainName}</Text>
+          {parseFloat(walletBalance || "0") < 0.01 && (
+            <TouchableOpacity
+              style={styles.faucetButton}
+              onPress={() => Linking.openURL("https://faucet.polygon.technology/")}
+            >
+              <Text style={styles.faucetText}>Get Free Test POL</Text>
+              <ExternalLink size={14} color="#7c3aed" />
+            </TouchableOpacity>
+          )}
+        </View>
+
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Quick Actions</Text>
 
@@ -203,6 +238,35 @@ export default function EnterpriseDashboard() {
                 </View>
               </View>
             ))}
+          </View>
+        )}
+
+        {/* On-Chain Transactions */}
+        {issuedCredentials.some((c) => c.txHash) && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>On-Chain Transactions</Text>
+            {issuedCredentials
+              .filter((c) => c.txHash)
+              .slice(-5)
+              .reverse()
+              .map((cred, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={styles.txCard}
+                  onPress={() => Linking.openURL(getExplorerUrl(cred.txHash))}
+                >
+                  <View style={styles.txLeft}>
+                    <View style={styles.txDot} />
+                    <View>
+                      <Text style={styles.txPlatform}>{cred.claims.platform}</Text>
+                      <Text style={styles.txHash} numberOfLines={1}>
+                        {cred.txHash.slice(0, 10)}...{cred.txHash.slice(-8)}
+                      </Text>
+                    </View>
+                  </View>
+                  <ExternalLink size={14} color="#94a3b8" />
+                </TouchableOpacity>
+              ))}
           </View>
         )}
       </ScrollView>
@@ -415,5 +479,91 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: "Inter_400Regular",
     color: "#1e293b",
+  },
+  walletCard: {
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: "#ede9fe",
+  },
+  walletHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  walletLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  walletTitle: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+    color: "#64748b",
+  },
+  walletBalance: {
+    fontSize: 28,
+    fontFamily: "Inter_700Bold",
+    color: "#1e293b",
+    marginBottom: 4,
+  },
+  walletNetwork: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    color: "#94a3b8",
+    marginBottom: 8,
+  },
+  faucetButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 6,
+    backgroundColor: "#f5f3ff",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  faucetText: {
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+    color: "#7c3aed",
+  },
+  txCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#ffffff",
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: "#f1f5f9",
+  },
+  txLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flex: 1,
+  },
+  txDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#16a34a",
+  },
+  txPlatform: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+    color: "#1e293b",
+    marginBottom: 2,
+  },
+  txHash: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    color: "#94a3b8",
   },
 });

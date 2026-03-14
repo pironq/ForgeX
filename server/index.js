@@ -122,6 +122,11 @@ app.get('/api/enterprise/verify', async (req, res) => {
 
 // POST /api/admin/verify-enterprise - Add a verified enterprise (admin use only)
 app.post('/api/admin/verify-enterprise', async (req, res) => {
+  const apiKey = req.headers['x-admin-key'];
+  if (!apiKey || apiKey !== process.env.ADMIN_API_KEY) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
   const { walletAddress, name } = req.body;
 
   if (!walletAddress) {
